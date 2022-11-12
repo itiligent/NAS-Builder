@@ -1,2 +1,2 @@
 # NAS-Builder
-Simple Linux Samba NAS with Rclone VFS cloud storage caching &amp; synchronisation
+Backup cloud storage to NAS & mount cloud storage as a local virtual file system
