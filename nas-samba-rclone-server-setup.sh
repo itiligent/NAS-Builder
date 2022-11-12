@@ -63,6 +63,8 @@ HOSTS_ALLOWED=$(ip -o -f inet addr show $INTERFACE | awk '/scope global/ {print 
 apt-get update
 apt-get install samba -y
 apt-get install acl -y
+apt-get install wsdd2 -y
+
 sudo -v ; curl https://rclone.org/install.sh | sudo bash
 
 # Create the rclone config file with correct cuurrent user permissions
@@ -209,7 +211,10 @@ pdbedit -L -v
 systemctl enable rclonevfs.service
 systemctl start rclonevfs.service
 systemctl restart smbd nmbd
-
-# Install W2dd2 for network browsing after samba
-apt-get install wsdd2 -y
 systemctl restart wsdd2
+
+# Add fix for potential race condition where wsdd2 starts before Samba or DHCP network adapter is fully initialised
+crontab -l > cron_1
+echo "@reboot sleep 30 && systemctl restart wsdd2 # restart wsdd2 30 sec after reboot" >> cron_1
+crontab cron_1
+rm cron_1
