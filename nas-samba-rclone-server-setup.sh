@@ -147,8 +147,6 @@ cat <<EOF | sudo tee $SAMBA_CONFIG_PATH/smb.conf
    hosts allow = 127.0.0.1/8 $HOSTS_ALLOWED
 EOF
 
-sudo systemctl restart smbd nmbd
-
 # Below is for onedrive personal and is intended as a placeholer only. 
 # You will need to run 'rclone config' after this installer script to correctly complete the Rclone setup for your cloud provider.
 cat <<EOF > $RCLONE_CONFIG_PATH/rclone.conf
