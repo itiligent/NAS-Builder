@@ -69,9 +69,8 @@ sudo -v ; curl https://rclone.org/install.sh | sudo bash
 
 # Create the rclone config file with correct cuurrent user permissions
 mkdir -p $RCLONE_CONFIG_PATH
-sleep 2
 touch $RCLONE_CONFIG_PATH/rclone.conf
-sleep 2
+chown -R $SUDO_USER:$SUDO_USER $RCLONE_CONFIG_PATH
 chown -R $SUDO_USER:$SUDO_USER $RCLONE_CONFIG_PATH/rclone.conf
 
 # Setup the current logged on linux user as a samba user then add this user to a new "sambausers" security group
@@ -215,6 +214,6 @@ systemctl restart wsdd2
 
 # Add fix for potential race condition where wsdd2 starts before Samba or DHCP network adapter is fully initialised
 crontab -l > cron_1
-echo "@reboot sleep 30 && systemctl restart wsdd2 # restart wsdd2 30 sec after reboot" >> cron_1
+echo "@reboot sleep 60 && systemctl restart wsdd2 # restart wsdd2 60 sec after reboot" >> cron_1
 crontab cron_1
 rm cron_1
