@@ -93,7 +93,7 @@ cat <<EOF | sudo tee $SAMBA_CONFIG_PATH/smb.conf
 [global]
 
   workgroup = WORKGROUP
-  server string = %h
+  server string = Samba Server %h
 
   interfaces = 127.0.0.0/8 $INTERFACE
   bind interfaces only = yes
@@ -214,6 +214,8 @@ systemctl restart wsdd2
 
 # Add fix for potential race condition where wsdd2 starts before Samba or DHCP network adapter is fully initialised
 crontab -l > cron_1
-echo "@reboot sleep 60 && systemctl restart wsdd2 # restart wsdd2 60 sec after reboot" >> cron_1
+echo "@reboot sleep 30 && systemctl restart wsdd2 # restart wsdd2 30 sec after reboot" >> cron_1
 crontab cron_1
 rm cron_1
+
+
