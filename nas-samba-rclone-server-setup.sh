@@ -61,18 +61,12 @@ HOSTS_ALLOWED=$(ip -o -f inet addr show $INTERFACE | awk '/scope global/ {print 
 
 # Install packages
 apt-get update
-apt-get install curl -y
-apt-get install samba -y
-apt-get install acl -y
-apt-get install wsdd2 -y
-
+apt-get install curl samba acl wsdd2 -y
 sudo -v ; curl https://rclone.org/install.sh | sudo bash
 
 # Create the rclone config file with correct cuurrent user permissions
 sudo -u $SUDO_USER mkdir -p $RCLONE_CONFIG_PATH   
 sudo -u $SUDO_USER touch $RCLONE_CONFIG_PATH/rclone.conf
-# chown -R $SUDO_USER:$SUDO_USER $RCLONE_CONFIG_PATH
-# chown -R $SUDO_USER:$SUDO_USER $RCLONE_CONFIG_PATH/rclone.conf
 
 # Setup the current logged on linux user as a samba user then add this user to a new "sambausers" security group
 (echo $PASS; sleep 1; echo $PASS) | smbpasswd -a -s $SUDO_USER
@@ -199,13 +193,12 @@ RestartSec=3
 WantedBy=default.target
 EOF
 
-# Adjust rclonevfs.service file as required backslashes make it hard to write out in one pass
+# Quick and dirty adjustment to rclonevfs.service because backslashes are cat escape characters. 
+# We need to use "EOF" in quotes to force exact text append, but this also means $VARIABLES become plain text too. 
+# So, instead we use sed to put back the variable values that should be translated...
 sed -i "s|path_to_rclone.conf|$RCLONE_CONFIG_PATH|g" $SYSTEMD_PATH/rclonevfs.service
 sed -i "s|path_to_rclone_cache|$RCLONE_CACHE_PATH|g" $SYSTEMD_PATH/rclonevfs.service
 sed -i "s|path_to_vfs_root|$VFSSHARE|g" $SYSTEMD_PATH/rclonevfs.service
-
-# List all samba users to verify new samba user creation
-pdbedit -L -v
 
 # start rclone VFS as a service
 systemctl enable rclonevfs.service
