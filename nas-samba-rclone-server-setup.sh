@@ -70,9 +70,9 @@ sudo -v ; curl https://rclone.org/install.sh | sudo bash
 
 # Create the rclone config file with correct cuurrent user permissions
 sudo -u $SUDO_USER mkdir -p $RCLONE_CONFIG_PATH   
-touch $RCLONE_CONFIG_PATH/rclone.conf
-chown -R $SUDO_USER:$SUDO_USER $RCLONE_CONFIG_PATH
-chown -R $SUDO_USER:$SUDO_USER $RCLONE_CONFIG_PATH/rclone.conf
+sudo -u $SUDO_USER touch $RCLONE_CONFIG_PATH/rclone.conf
+# chown -R $SUDO_USER:$SUDO_USER $RCLONE_CONFIG_PATH
+# chown -R $SUDO_USER:$SUDO_USER $RCLONE_CONFIG_PATH/rclone.conf
 
 # Setup the current logged on linux user as a samba user then add this user to a new "sambausers" security group
 (echo $PASS; sleep 1; echo $PASS) | smbpasswd -a -s $SUDO_USER
@@ -218,3 +218,5 @@ crontab -l > cron_1
 echo "@reboot sleep 30 && systemctl restart wsdd2 # restart wsdd2 30 sec after reboot" >> cron_1
 crontab cron_1
 rm cron_1
+
+ 
