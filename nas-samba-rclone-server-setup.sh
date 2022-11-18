@@ -74,9 +74,9 @@ groupadd sambausers
 gpasswd -a $SUDO_USER sambausers
 
 # Create new share directories 
-mkdir -p $PRIVSHARE
-mkdir -p $PUBSHARE
-mkdir -p $VFSSHARE
+sudo -u $SUDO_USER mkdir -p $PRIVSHARE
+sudo -u $SUDO_USER mkdir -p $PUBSHARE
+sudo -u $SUDO_USER mkdir -p $VFSSHARE
 
 # Set Permissions on new share directories
 sudo setfacl -R -m "g:sambausers:rwx" $PRIVSHARE
