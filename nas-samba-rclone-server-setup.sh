@@ -51,13 +51,14 @@ clear
 PASS=password
 PRIVSHARE=/mnt/data/private_share
 PUBSHARE=/mnt/data/public_share
-VFSSHARE=/mnt/data/onedrive_vfs
+VFSSHARE=/mnt/onedrive_vfs
 SAMBA_CONFIG_PATH=/etc/samba
 RCLONE_CONFIG_PATH=/home/$SUDO_USER/.config/rclone 
-RCLONE_CACHE_PATH=/mnt/data/.rclone
+RCLONE_CACHE_PATH=/mnt/.rclone
 SYSTEMD_PATH=/etc/systemd/system
 INTERFACE=$(ip -br l | awk '$1 !~ "lo|vir|wl" { print $1}')
 HOSTS_ALLOWED=$(ip -o -f inet addr show $INTERFACE | awk '/scope global/ {print $4}' | perl -ne 's/(?<=\d.)\d{1,3}(?=\/)/0/g; print;')
+RCLONE_REMOTE_NAME=rclone_remote_connection
 
 # Install packages
 apt-get update
@@ -74,9 +75,13 @@ groupadd sambausers
 gpasswd -a $SUDO_USER sambausers
 
 # Create new share directories 
-sudo -u $SUDO_USER mkdir -p $PRIVSHARE
-sudo -u $SUDO_USER mkdir -p $PUBSHARE
-sudo -u $SUDO_USER mkdir -p $VFSSHARE
+mkdir -p $PRIVSHARE
+mkdir -p $PUBSHARE
+mkdir -p $VFSSHARE
+# Optionally chang the default permissions on the share directors to avoid permissions issues when moving files around from Linux command as sudo
+chown -R $SUDO_USER:$SUDO_USER $PRIVSHARE
+chown -R $SUDO_USER:$SUDO_USER $PUBSHARE
+chown -R $SUDO_USER:root $VFSSHARE
 
 # Set Permissions on new share directories
 sudo setfacl -R -m "g:sambausers:rwx" $PRIVSHARE
@@ -146,7 +151,7 @@ EOF
 # Below is for onedrive personal and is intended as a placeholer only. 
 # You will need to run 'rclone config' after this installer script to correctly complete the Rclone setup for your cloud provider.
 cat <<EOF > $RCLONE_CONFIG_PATH/rclone.conf
-[onedrive-personal]
+[$RCLONE_REMOTE_NAME]
 type = onedrive
 client_id = ???
 client_secret = ???
@@ -161,7 +166,7 @@ EOF
 cat <<"EOF" > $SYSTEMD_PATH/rclonevfs.service
 [Unit]
 Description=One Drive VFS Mount (rclone)
-AssertPathIsDirectory=/mnt/data/onedrive_vfs
+AssertPathIsDirectory=path_to_vfs_root
 After=multi-user.target
 
 [Service]
@@ -170,7 +175,7 @@ ExecStart=/usr/bin/rclone mount \
         --config=path_to_rclone.conf/rclone.conf \
         --cache-tmp-upload-path=path_to_rclone_cache \
         --cache-db-path=path_to_rclone_cache \
-        --cache-dir=path_to_rclone_cache/.rclone \
+        --cache-dir=path_to_rclone_cache \
         --cache-chunk-size 8m \
         --cache-chunk-total-size 10g \
         --cache-info-age 12h \
@@ -184,7 +189,7 @@ ExecStart=/usr/bin/rclone mount \
         --cache-db-wait-time 0m3s \
         --buffer-size 256m \
         --allow-other \
-        --uid 1000 onedrive-personal:/ path_to_vfs_root
+        --uid 1000 remote_name:/ path_to_vfs_root
 ExecStop=/bin/fusermount -u path_to_vfs_root
 Restart=always
 RestartSec=3
@@ -199,6 +204,7 @@ EOF
 sed -i "s|path_to_rclone.conf|$RCLONE_CONFIG_PATH|g" $SYSTEMD_PATH/rclonevfs.service
 sed -i "s|path_to_rclone_cache|$RCLONE_CACHE_PATH|g" $SYSTEMD_PATH/rclonevfs.service
 sed -i "s|path_to_vfs_root|$VFSSHARE|g" $SYSTEMD_PATH/rclonevfs.service
+sed -i "s|remote_name|$RCLONE_REMOTE_NAME|g" $SYSTEMD_PATH/rclonevfs.service
 
 # start rclone VFS as a service
 systemctl enable rclonevfs.service

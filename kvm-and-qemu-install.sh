@@ -29,4 +29,5 @@ timedatectl set-timezone Australia/Melbourne
 # virsh shutdown target_guest_machine
 # virsh domblklist guest_name # get images file location of VM
 # virsh dumpxml target_guest_machine > ~/target_guest_machine.xml
-# sudo qemu-img convert -c -O qcow2 source.qcow2 shrunk.qcow2 -p
+# sudo qemu-img convert -O qcow2 source.qcow2 shrunk.qcow2 -p
+# virsh define guest_name.xml
