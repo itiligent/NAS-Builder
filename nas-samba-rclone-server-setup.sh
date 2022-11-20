@@ -51,10 +51,10 @@ clear
 PASS=password
 PRIVSHARE=/mnt/data/private_share
 PUBSHARE=/mnt/data/public_share
-VFSSHARE=/mnt/onedrive_vfs
+VFSSHARE=/mnt/data/onedrive_vfs
 SAMBA_CONFIG_PATH=/etc/samba
 RCLONE_CONFIG_PATH=/home/$SUDO_USER/.config/rclone 
-RCLONE_CACHE_PATH=/mnt/.rclone
+RCLONE_CACHE_PATH=/mnt/data/.rclone
 SYSTEMD_PATH=/etc/systemd/system
 INTERFACE=$(ip -br l | awk '$1 !~ "lo|vir|wl" { print $1}')
 HOSTS_ALLOWED=$(ip -o -f inet addr show $INTERFACE | awk '/scope global/ {print $4}' | perl -ne 's/(?<=\d.)\d{1,3}(?=\/)/0/g; print;')
