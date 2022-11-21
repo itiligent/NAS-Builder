@@ -76,6 +76,8 @@ virsh net-list --all
 
 
 
+
+
 #######################################################################################
 # Backblaze Docker solution
 
@@ -117,6 +119,9 @@ IMPORTANT: before continuing with the Backblaze install:
 	docker restart backblaze_personal_backup
 	
 	then go back to browser http://NAS.ip reresh and continue Backblaze login and install 
+
+
+
 	
 
 #######################################################################################
@@ -139,7 +144,7 @@ sudo wget -NP /etc/apt/sources.list.d/ https://dl.winehq.org/wine-builds/ubuntu/
 sudo apt update
 sudo apt install --install-recommends winehq-stable -y
 sudo apt-get install -y curl wget software-properties-common gnupg2 winbind xvfb winetricks gnome-startup-applications -y
--y
+
 sudo apt-get clean -y
 sudo apt-get autoremove -y
 
