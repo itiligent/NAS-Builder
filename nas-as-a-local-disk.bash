@@ -1,17 +1,15 @@
 #######################################################################################
-# Build a flexible VM or docker local disk layer above Linux NAS storage              #
+# Build a flexible VM, Wine or docker local disk layer above Linux NAS storage              #
 # For Ubuntu Server / Debian Server                                                   #
 # David Harrop                                                                        #
 # November 2022                                                                       #
 #######################################################################################
 
 
+#######################################################################################
+# Hypervisor and VM solution: (KVM & QEMU Libvirt)
+#	If host system is VMware, ensure VMware ESXi is configured with Virutalisation CPU extensions are enabled for the VM
 
-
-# VM Solution:
-# 1. Ensure VMware ESXi is configured with:
-# 	a Virutalisation CPU extensions are enabled for the VM
-# 	b. Esxi Vswitch security must allow Promiscous mode, MAC Address Ahanges & Forged Transmits for bridging to work
 timedatectl set-timezone Australia/Melbourne	
 apt-get apt update
 apt-get install ubuntu-desktop-minimal --no-install-recommends open-vm-tools-desktop -y
@@ -19,8 +17,17 @@ wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
 sudo dpkg -i google-chrome-stable_current_amd64.deb
 sudo apt -f install
 apt-get install qemu-kvm libvirt-clients libvirt-daemon-system bridge-utils virt-manager -y
-			
-# Setup netplan bridge in /etc/netplan
+# Google for rest of VM with virtio-fs setup in Virtmanager. Detailed instructions for setting up a virtio-fs in a VM:
+https://virtio-fs.gitlab.io/howto-windows.html
+https://winfsp.dev/
+https://github.com/virtio-win/virtio-win-pkg-scripts/blob/master/README.md
+https://www.spice-space.org/download.html
+http://www.linux-kvm.org/page/9p_virtio
+ 
+# To connect VMs directly to the local network without NAT, setup a network bridge in both Linux and libvirt 
+# 	If host system is VMware, vswitch security must allow promiscous mode, MAC address changes & forged transmits for bridging to work
+
+# /etc/netplan/filename.yaml
 network:
   version: 2
   renderer: networkd
@@ -36,7 +43,7 @@ network:
 sudo netplan generate
 sudo netplan --debug apply
 
-# Create new bridge host network 
+# Create new "host-bridge" network in libvirt 
 sudo nano /etc/libvirt/qemu/host-bridge.xml
 
 <network>
@@ -45,32 +52,27 @@ sudo nano /etc/libvirt/qemu/host-bridge.xml
   <bridge name="br0"/>
 </network>
 
-# create libvirt network using existing host bridge
+# Then write the config and verify...
 virsh net-define /etc/libvirt/qemu/host-bridge.xml
 virsh net-start host-bridge
 virsh net-autostart host-bridge
 virsh net-list --all
 	
-# Configure VM to use the new host bridge as network source device
-# Device model = virtio 
+# Lastly, configure VM in Virtmanager or XML cli to use the new "host-bridge" as a network source device, also select device model as = virtio 
 
-# Useful virt commands
+# With VMss running, here are some useful virt commands
 	virsh list --all
 	virsh domblklist guest_name # get images file location of VM
 	virsh dumpxml target_guest_machine > ~/target_guest_machine.xml
 	sudo qemu-img convert -O qcow2 source.qcow2 shrunk.qcow2 -p
 	virsh define guest_name.xml
 	virsh shutdown target_guest_machine
-	virsh autostart vm_machine_name --disable / --enable
-
-# Detailed instructions for setting up virtio-fs in VM:
-https://virtio-fs.gitlab.io/howto-windows.html
-https://winfsp.dev/
-https://github.com/virtio-win/virtio-win-pkg-scripts/blob/master/README.md
-https://www.spice-space.org/download.html
-http://www.linux-kvm.org/page/9p_virtio
+	virsh autostart vm_machine_name --disable or --enable
+	virsh snapshot-create-as --domain {VM-NAME} --name "{SNAPSHOT-NAME}"
 
 
+
+#######################################################################################
 # Backblaze Docker solution
 
 #Install Docker
@@ -88,7 +90,7 @@ sudo apt-get install docker-ce docker-ce-cli containerd.io docker-compose-plugin
 sudo usermod -aG docker $SUDO_USER
 newgrp docker
  
-	# then manually add
+# then manually run
 
 docker run \
     -p 80:5800 \
@@ -101,12 +103,15 @@ docker run \
     -v '/home/david/.wine:/config/' \
     tessypowder/backblaze-personal-wine:latest
 	
-go your browser http://NAS.ip and click install wine
-		
-IMPORTANT: before continuing with the Backblaze install you musr you MUST setup dosdisks FIRST..	
-	from a second terminal: docker exec --user app backblaze_personal_backup ln -s /drive_d/ /config/wine/dosdevices/d:
-		docker restart backblaze_personal_backup
-			then go back to browser http://NAS.ip reresh and continue Backblaze login and install 
-				docker run -d --restart unless-stopped tessypowder/backblaze-personal-wine:latest
+Next go your browser http://NAS.ip and click install wine, then STOP. 
 
+IMPORTANT: before continuing with the Backblaze install:
+
+	You musr you MUST setup wine dosdisks FIRST.. keping the first terminal with docker run open, from a second terminal:
+	
+	docker exec --user app backblaze_personal_backup ln -s /drive_d/ /config/wine/dosdevices/d:
+	docker restart backblaze_personal_backup
+	
+	then go back to browser http://NAS.ip reresh and continue Backblaze login and install 
+			
 	
