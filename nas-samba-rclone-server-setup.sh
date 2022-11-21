@@ -38,7 +38,6 @@
 #           it behaves similarly to a regular OneDrive client. 
 # 			See https://rclone.org/commands/rclone_mount/#vfs-file-caching for all VFS config options
 
-
 # Check for sudo
 if [ -z "$SUDO_USER" ]; then
     echo "This script is only allowed to run from sudo";
@@ -218,4 +217,4 @@ echo "@reboot sleep 30 && systemctl restart wsdd2 # restart wsdd2 30 sec after r
 crontab cron_1
 rm cron_1
 
- 
+timedatectl set-timezone Australia/Melbourne	
