@@ -5,18 +5,23 @@
 # November 2022                                                                       #
 #######################################################################################
 
+# Add AU locale for correct file time and date formats
+sudo sed -i -e 's/en_US.UTF-8 UTF-8/# en_US.UTF-8 UTF-8/' /etc/locale.gen
+sudo sed -i -e 's/# en_AU.UTF-8 UTF-8/en_AU.UTF-8 UTF-8/' /etc/locale.gen
+sudo dpkg-reconfigure --frontend=noninteractive locales 
+sudo localectl set-locale en_AU.UTF-8
+reboot or re-login
+
 # If host system is VMware, ensure VMware ESXi is configured with Virutalisation CPU extensions are enabled for the VM
 
-apt-get apt update
-apt-get install ubuntu-desktop-minimal --no-install-recommends open-vm-tools-desktop -y
-apt-get install qemu-kvm libvirt-clients libvirt-daemon-system bridge-utils virt-manager -y
+sudo apt-get update
+sudo apt-get install ubuntu-desktop-minimal --no-install-recommends open-vm-tools-desktop -y
 
-# Google for rest of VM with virtio-fs setup in Virtmanager. Detailed instructions for setting up a virtio-fs in a VM:
-https://virtio-fs.gitlab.io/howto-windows.html
-https://winfsp.dev/
-https://github.com/virtio-win/virtio-win-pkg-scripts/blob/master/README.md
-https://www.spice-space.org/download.html
-http://www.linux-kvm.org/page/9p_virtio
+reboot
+
+sudo apt-get install qemu-kvm libvirt-clients libvirt-daemon-system bridge-utils virt-manager -y
+
+reboot
 
 # Optionally install Google Chrome:
 wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
@@ -44,6 +49,8 @@ network:
 sudo netplan generate
 sudo netplan --debug apply
 
+reboot
+
 # Create new "host-bridge" network in Qemu  
 sudo nano /etc/libvirt/qemu/host-bridge.xml
 
@@ -58,6 +65,17 @@ virsh net-define /etc/libvirt/qemu/host-bridge.xml
 virsh net-start host-bridge
 virsh net-autostart host-bridge
 virsh net-list --all
+
+# Google for rest of VM with virtio-fs setup in Virtmanager. Detailed instructions for setting up a virtio-fs in a VM:
+# Need to download 
+# 	1. virtio-win driver iso
+# 	3. spice guest tools
+# 	3. winfsp application (needed for file system pass through only)
+https://virtio-fs.gitlab.io/howto-windows.html
+https://winfsp.dev/
+https://github.com/virtio-win/virtio-win-pkg-scripts/blob/master/README.md
+https://www.spice-space.org/download.html
+http://www.linux-kvm.org/page/9p_virtio
 	
 # Lastly, configure VM in Virtmanager (or directly edit XML via cli) to use the new "host-bridge" as a network source device, 
 # also select VM's network device model as = virtio 

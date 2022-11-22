@@ -5,6 +5,15 @@
 # November 2022                                                                       #
 #######################################################################################
 
+
+# Add AU locale for correct file time and date formats
+sudo sed -i -e 's/en_US.UTF-8 UTF-8/# en_US.UTF-8 UTF-8/' /etc/locale.gen
+sudo sed -i -e 's/# en_AU.UTF-8 UTF-8/en_AU.UTF-8 UTF-8/' /etc/locale.gen
+sudo dpkg-reconfigure --frontend=noninteractive locales 
+sudo localectl set-locale en_AU.UTF-8
+reboot or re-login
+
+
 #Install Docker
 
 !/bin/bash
