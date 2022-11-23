@@ -40,24 +40,27 @@
 
 # Check for sudo
 if [ -z "$SUDO_USER" ]; then
-    echo "This script is only allowed to run from sudo";
+    echo "You must run this script as sudo!";
     exit -1;
 fi
 
 clear
 
-# Set variables
-PASS=password
+# user specific variables
 PRIVSHARE=/mnt/data/private_share
 PUBSHARE=/mnt/data/public_share
 VFSSHARE=/mnt/data/onedrive_vfs
+RCLONE_CACHE_PATH=/mnt/data/.rclone
+SMBPASS=password
+RCLONE_REMOTE_NAME=rclone_remote_connection
+
+# platform variables
 SAMBA_CONFIG_PATH=/etc/samba
 RCLONE_CONFIG_PATH=/home/$SUDO_USER/.config/rclone 
-RCLONE_CACHE_PATH=/mnt/data/.rclone
 SYSTEMD_PATH=/etc/systemd/system
 INTERFACE=$(ip -br l | awk '$1 !~ "lo|vir|wl" { print $1}')
 HOSTS_ALLOWED=$(ip -o -f inet addr show $INTERFACE | awk '/scope global/ {print $4}' | perl -ne 's/(?<=\d.)\d{1,3}(?=\/)/0/g; print;')
-RCLONE_REMOTE_NAME=rclone_remote_connection
+
 
 # Install packages
 apt-get update
@@ -69,7 +72,7 @@ sudo -u $SUDO_USER mkdir -p $RCLONE_CONFIG_PATH
 sudo -u $SUDO_USER touch $RCLONE_CONFIG_PATH/rclone.conf
 
 # Setup the current logged on linux user as a samba user then add this user to a new "sambausers" security group
-(echo $PASS; sleep 1; echo $PASS) | smbpasswd -a -s $SUDO_USER
+(echo $SMBPASS; sleep 1; echo $SMBPASS) | smbpasswd -a -s $SUDO_USER
 groupadd sambausers
 gpasswd -a $SUDO_USER sambausers
 
@@ -147,6 +150,20 @@ cat <<EOF | sudo tee $SAMBA_CONFIG_PATH/smb.conf
    hosts allow = 127.0.0.1/8 $HOSTS_ALLOWED
 EOF
 
+# Add fix for potential race condition where wsdd2 starts before Samba or DHCP network adapter is fully initialised
+crontab -l > cron_1
+echo "@reboot sleep 30 && systemctl restart wsdd2 # restart wsdd2 30 sec after reboot" >> cron_1
+crontab cron_1
+rm cron_1
+
+# Set correct locale for easy to read file time/date formats
+sudo sed -i -e 's/en_US.UTF-8 UTF-8/# en_US.UTF-8 UTF-8/' /etc/locale.gen
+sudo sed -i -e 's/# en_AU.UTF-8 UTF-8/en_AU.UTF-8 UTF-8/' /etc/locale.gen
+sudo dpkg-reconfigure --frontend=noninteractive locales 
+sudo localectl set-locale en_AU.UTF-8
+timedatectl set-timezone Australia/Melbourne	
+
+
 # Below is for onedrive personal and is intended as a placeholer only. 
 # You will need to run 'rclone config' after this installer script to correctly complete the Rclone setup for your cloud provider.
 cat <<EOF > $RCLONE_CONFIG_PATH/rclone.conf
@@ -205,16 +222,75 @@ sed -i "s|path_to_rclone_cache|$RCLONE_CACHE_PATH|g" $SYSTEMD_PATH/rclonevfs.ser
 sed -i "s|path_to_vfs_root|$VFSSHARE|g" $SYSTEMD_PATH/rclonevfs.service
 sed -i "s|remote_name|$RCLONE_REMOTE_NAME|g" $SYSTEMD_PATH/rclonevfs.service
 
-# start rclone VFS as a service
-systemctl enable rclonevfs.service
-systemctl start rclonevfs.service
+
+# Kickstart all services 
 systemctl restart smbd nmbd
 systemctl restart wsdd2
+systemctl enable rclonevfs.service
+systemctl start rclonevfs.service
 
-# Add fix for potential race condition where wsdd2 starts before Samba or DHCP network adapter is fully initialised
-crontab -l > cron_1
-echo "@reboot sleep 30 && systemctl restart wsdd2 # restart wsdd2 30 sec after reboot" >> cron_1
-crontab cron_1
-rm cron_1
+# Setup structure to call rclone scripts  
+cat <<"EOF" > $RCLONE_CONFIG_PATH/run-rclone-script.sh
+#!/bin/bash
 
-timedatectl set-timezone Australia/Melbourne	
+# Prevent scheduled rclone scripted tasks being run multiple times simultaneously if they are triggered again before the previous is complete.
+# Also we must prevent rclone continuing as a zombie process even after an rclone task has been manually stopped with ^C (a commmon issue in some circumstances)
+
+# Instead, we should hand launch or cron schedule all scripted rclone tasks via this caller script. 
+
+# This script first validates if a particular scheduled rclone script is still running, then kills it before re-running same.
+# You can confirm how many instances of a script are running at any time with..
+# ps aux | grep rclone 
+
+ 
+# Which rclone script do we check to see is already running?
+SYNC_SCRIPT_CHECK_1=script_1
+#SYNC_SCRIPT_CHECK_2=script_2
+
+
+# Make a list of any PIDs that contain the term "rclone" that are running. Place any extra exceptions below. Be careful using "rclone" other script names. try r-clone
+PID=`ps aux | grep "rclone" | grep -v 'grep' | grep -v 'mount' | grep -v 'nano' | grep -v 'run-rclone-script.sh' | awk '{ print $2 }'`
+#PID=`ps aux | grep some-other-string | awk '{print $2}'` # for later if needed
+
+# Now lets kill all of the PIDs from the list
+for P in $PID; do
+    echo "Killing $P"
+    kill -9 $P
+done
+
+# Now that we've stopped the rclone we dont want to duplicate, we can start the same script(s) again
+script_path/$SYNC_SCRIPT_CHECK_1
+#script_path/$SYNC_SCRIPT_CHECK_2 # for later if needed
+EOF
+
+chmod +x $RCLONE_CONFIG_PATH/run-rclone-script.sh
+chown $SUDO_USER:$SUDO_USER $RCLONE_CONFIG_PATH/run-rclone-script.sh
+
+sed -i "s|script_1|sync-$RCLONE_REMOTE_NAME.sh|g" $RCLONE_CONFIG_PATH/run-rclone-script.sh
+sed -i "s|script_2|some-other-rclone-script.sh|g" $RCLONE_CONFIG_PATH/run-rclone-script.sh
+sed -i "s|script_path|$RCLONE_CONFIG_PATH|g" $RCLONE_CONFIG_PATH/run-rclone-script.sh
+
+# 
+cat <<EOF > $RCLONE_CONFIG_PATH/sync-$RCLONE_REMOTE_NAME.sh
+#!/bin/bash
+# This example DOWNLOADS from cloud storage, syncs to a local share and writes error level output to a logfile (change INFO to ERROR or DEBUG for differing output)
+# The below settings are very conservative and do not appear to trigger any bannning or errors from a OneDrive Personal remote connection.
+# See rclone docs for more info on tuning cloud provider connections and avoiding a breach of provider transaction & connection limits. (Breaching limits can invoke upstream throttling or even periodic disconnections)
+ 
+rclone sync --tpslimit 3  --tpslimit-burst 1 --transfers=3 $RCLONE_REMOTE_NAME: $PRIVSHARE --log-level INFO --log-file $PRIVSHARE/rclone.log
+
+# EXAMPLE manual commmand - DOWNLOADS from cloud and syncs to a local share showing info output in the terminal)
+#rclone sync -v --tpslimit 3  --tpslimit-burst 1 --transfers=3 $RCLONE_REMOTE_NAME: $PRIVSHARE --stats-one-line 
+EOF
+
+chmod +x $RCLONE_CONFIG_PATH/sync-$RCLONE_REMOTE_NAME.sh
+chown $SUDO_USER:$SUDO_USER $RCLONE_CONFIG_PATH/sync-$RCLONE_REMOTE_NAME.sh
+
+
+# Setup a (disabled) example cron task (in current user's crontab) to regularly run a scripted rclone task 
+su -s /bin/bash -c 'crontab -l > cron_2' -m $SUDO_USER
+echo "#0 */12 * * * $RCLONE_CONFIG_PATH/run-rclone-script.sh # run this rclone task every 12 hours" >> cron_2
+su -s /bin/bash -c 'crontab cron_2' -m $SUDO_USER
+rm cron_2
+
+

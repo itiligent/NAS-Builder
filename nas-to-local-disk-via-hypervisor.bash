@@ -43,7 +43,7 @@ network:
   bridges:
     br0:
       interfaces: [ens160]
-      macaddress: 00:0C:29:AB:05:51  # add your desired mac to set a static dhcp lease
+      macaddress: 00:0c:29:56:fa:ef  # add your desired mac to set a static dhcp lease
       dhcp4: yes
 
 sudo netplan generate
