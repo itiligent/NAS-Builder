@@ -193,7 +193,7 @@ ExecStart=/usr/bin/rclone mount \
         --cache-db-path=path_to_rclone_cache \
         --cache-dir=path_to_rclone_cache \
         --cache-chunk-size 8m \
-        --cache-chunk-total-size 50g \
+        --cache-chunk-total-size 10g \
         --cache-info-age 12h \
         --cache-tmp-wait-time 30s \
         --dir-cache-time 5m \
