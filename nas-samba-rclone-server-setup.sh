@@ -193,7 +193,7 @@ ExecStart=/usr/bin/rclone mount \
         --cache-db-path=path_to_rclone_cache \
         --cache-dir=path_to_rclone_cache \
         --cache-chunk-size 8m \
-        --cache-chunk-total-size 10g \
+        --cache-chunk-total-size 50g \
         --cache-info-age 12h \
         --cache-tmp-wait-time 30s \
         --dir-cache-time 5m \
@@ -273,11 +273,11 @@ sed -i "s|script_path|$RCLONE_CONFIG_PATH|g" $RCLONE_CONFIG_PATH/run-rclone-scri
 # 
 cat <<EOF > $RCLONE_CONFIG_PATH/sync-$RCLONE_REMOTE_NAME.sh
 #!/bin/bash
-# This example DOWNLOADS from cloud storage, syncs to a local share and writes error level output to a logfile (change INFO to ERROR or DEBUG for differing output)
+# This example DOWNLOADS from cloud storage, syncs to a local share and writes error level output to a logfile (change ERROR to INFO or DEBUG for differing output)
 # The below settings are very conservative and do not appear to trigger any bannning or errors from a OneDrive Personal remote connection.
 # See rclone docs for more info on tuning cloud provider connections and avoiding a breach of provider transaction & connection limits. (Breaching limits can invoke upstream throttling or even periodic disconnections)
  
-rclone sync --tpslimit 3  --tpslimit-burst 1 --transfers=3 $RCLONE_REMOTE_NAME: $PRIVSHARE --log-level INFO --log-file $PRIVSHARE/rclone.log
+rclone sync --tpslimit 3  --tpslimit-burst 1 --transfers=3 $RCLONE_REMOTE_NAME: $PRIVSHARE --log-level ERROR --log-file $PRIVSHARE/rclone.log --stats-one-line
 
 # EXAMPLE manual commmand - DOWNLOADS from cloud and syncs to a local share showing info output in the terminal)
 #rclone sync -v --tpslimit 3  --tpslimit-burst 1 --transfers=3 $RCLONE_REMOTE_NAME: $PRIVSHARE --stats-one-line 
