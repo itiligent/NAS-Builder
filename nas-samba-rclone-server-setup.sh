@@ -157,11 +157,11 @@ crontab cron_1
 rm cron_1
 
 # Set correct locale for easy to read file time/date formats
-sudo sed -i -e 's/en_US.UTF-8 UTF-8/# en_US.UTF-8 UTF-8/' /etc/locale.gen
-sudo sed -i -e 's/# en_AU.UTF-8 UTF-8/en_AU.UTF-8 UTF-8/' /etc/locale.gen
-sudo dpkg-reconfigure --frontend=noninteractive locales 
-sudo localectl set-locale en_AU.UTF-8
-timedatectl set-timezone Australia/Melbourne	
+update-locale "en_AU.UTF-8"
+locale-gen --purge "en_AU.UTF-8"
+dpkg-reconfigure --frontend noninteractive locales
+localectl set-locale en_AU.UTF-8
+timedatectl set-timezone Australia/Melbourne
 
 
 # Below is for onedrive personal and is intended as a placeholer only. 

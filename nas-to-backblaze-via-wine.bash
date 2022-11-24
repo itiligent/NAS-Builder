@@ -16,11 +16,11 @@ wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
 sudo dpkg -i google-chrome-stable_current_amd64.deb # dependency errors will show, fixed with following command
 sudo apt -f install
 
-# Add AU locale for correct file time and date formats
-sudo sed -i -e 's/en_US.UTF-8 UTF-8/# en_US.UTF-8 UTF-8/' /etc/locale.gen
-sudo sed -i -e 's/# en_AU.UTF-8 UTF-8/en_AU.UTF-8 UTF-8/' /etc/locale.gen
-sudo dpkg-reconfigure --frontend=noninteractive locales 
-sudo localectl set-locale en_AU.UTF-8
+# Set correct locale for easy to read file time/date formats
+locale-gen --purge "en_AU.UTF-8"
+dpkg-reconfigure --frontend noninteractive locales
+localectl set-locale en_AU.UTF-8
+timedatectl set-timezone Australia/Melbourne
 reboot or re-login
 # check date format is correct
 date +%x
