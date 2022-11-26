@@ -38,6 +38,16 @@
 #           it behaves similarly to a regular OneDrive client. 
 # 			See https://rclone.org/commands/rclone_mount/#vfs-file-caching for all VFS config options
 
+RED='\033[1;31m'
+GREEN='\033[1;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+PURPLE='\033[1;35m'
+NC='\033[0m'
+
+echo -e "${GREEN}"
+
 # Check for sudo
 if [ -z "$SUDO_USER" ]; then
     echo "You must run this script as sudo!";
@@ -64,8 +74,24 @@ HOSTS_ALLOWED=$(ip -o -f inet addr show $INTERFACE | awk '/scope global/ {print 
 
 # Install packages
 apt-get update
-apt-get install curl samba acl wsdd2 -y
-sudo -v ; curl https://rclone.org/install.sh | sudo bash
+
+# Debian and Raspbian have slightly differnt stable package lists. Wsdd2 is not currently avaiable as stable in Debian 11.5 
+source /etc/os-release
+if [[ "${NAME}" == "Debian"* ]]; then
+	apt-get install curl samba acl git build-essential -y
+	git clone https://salsa.debian.org/debian/wsdd2.git
+	cd wsdd2 && make && make install
+	systemctl enable wsdd2.service
+	systemctl start wsdd2.service
+	sudo -v ; curl https://rclone.org/install.sh | sudo bash
+	apt-get remove git build-essential -y
+	
+else
+	# Regular Ubuntu flavours
+	apt-get install curl samba acl wsdd2 -y
+	sudo -v ; curl https://rclone.org/install.sh | sudo bash
+	
+fi
 
 # Create the rclone config file with correct cuurrent user permissions
 sudo -u $SUDO_USER mkdir -p $RCLONE_CONFIG_PATH   
@@ -225,7 +251,7 @@ sed -i "s|remote_name|$RCLONE_REMOTE_NAME|g" $SYSTEMD_PATH/rclonevfs.service
 
 # Kickstart all services 
 systemctl restart smbd nmbd
-systemctl restart wsdd2
+systemctl start wsdd2.service
 systemctl enable rclonevfs.service
 systemctl start rclonevfs.service
 
@@ -287,10 +313,14 @@ chmod +x $RCLONE_CONFIG_PATH/sync-$RCLONE_REMOTE_NAME.sh
 chown $SUDO_USER:$SUDO_USER $RCLONE_CONFIG_PATH/sync-$RCLONE_REMOTE_NAME.sh
 
 
-# Setup a (disabled) example cron task (in current user's crontab) to regularly run a scripted rclone task 
-su -s /bin/bash -c 'crontab -l > cron_2' -m $SUDO_USER
-echo "#0 */12 * * * $RCLONE_CONFIG_PATH/run-rclone-script.sh # run this rclone task every 12 hours" >> cron_2
-su -s /bin/bash -c 'crontab cron_2' -m $SUDO_USER
-rm cron_2
+# Setup a (disabled) example cron task in current user's crontab to regularly run a scripted rclone task 
+su -s /bin/bash -c 'crontab -l > /home/$SUDO_USER/cron_2' -m $SUDO_USER
+echo "#0 */12 * * * $RCLONE_CONFIG_PATH/run-rclone-script.sh # run this rclone task every 12 hours" >> /home/$SUDO_USER/cron_2
+su -s /bin/bash -c 'crontab /home/$SUDO_USER/cron_2' -m $SUDO_USER
+rm /home/$SUDO_USER/cron_2
 
+apt-get autoremove -y
+apt-get clean 
+
+echo -e "${NC}"
 
