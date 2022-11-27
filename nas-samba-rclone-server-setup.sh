@@ -11,31 +11,31 @@
 # 2. Either stay with the initial Linux user account created at install, or create a new
 #    sudo user that Rclone will run as. A specific user account is needed becasue interactive (or user crontab tasks)
 #    need rights to the rclone.conf user configuarion profile to run.
-# 3. Run this install script logged on as the user you wish Rclone to run as.  
+# 3. Run this install script logged on as the user you wish Rclone to run as.
 #	 - Samba is first installed and the current user is enabled for samba and then added to the a new sambausers group
 # 	 - Next share directories are created in the paths as per $PRIVSHARE $PUBSHARE and $VFSSHARE variables
 #    - Correct file permissions are set on the new share directories
-#    - The preconfigured samba.conf file is copied over 
+#    - The preconfigured samba.conf file is copied over.
 #    - The rclone.conf placeholder is created in $RCLONE_CONFIG_PATH and correct user permissions to it are set. 
 #    - Rclone VFS is created as a system service and mounted in the $VFSSHARE path
 #    - Samba and Rclone services are restarted
 #	 - WSDD2 to enable network browsing is installed last. (This order seems to work better at discovering the finished samba config)   
-	 
-# 4. Investigate the correct settings you will need to authenticate with your cloud storage provider. 
+
+# 4. Investigate the correct settings you will need to authenticate with your cloud storage provider.
 #    See https://rclone.org for all other Rclone cloud sync options and instructions.
-# 5. Run rclone config and follow the interactive prompts that relate to your specific cloud provider
+# 5. Run rclone config and follow the interactive prompts that relate to your specific cloud provider.
 # 6. Restart the preconfigured VFS cache service with systemctl start rclonevfs.service. 
 
 #    Note1: Additional logging options to the $SYSTEMD_PATH/rclonevfs.service will help with any specific troubleshooting.
-#    Log optionas are DEBUG, INFO, NOTICE & ERROR 
+#    Log optionas are DEBUG, INFO, NOTICE & ERROR
 #    The below to rclonevfs.service to enables logging to syslog with resonable verbosity
-#    --log-level INFO \ 
+#    --log-level INFO \
  
-#    Note2: Many config options exist for setup and performance of VFS caching for many different use cases. 
-#           The settings in this script configures $SYSTEMD_PATH/rclonevfs.service for "full cache mode". 
-#           In this mode all reads and writes are buffered to and from disk. When data is read from the remote 
-#           this is buffered to disk as well. This mode consumes the most bandwidth and storage space however 
-#           it behaves similarly to a regular OneDrive client. 
+#    Note2: Many config options exist for setup and performance of VFS caching for many different use cases.
+#           The settings in this script configures $SYSTEMD_PATH/rclonevfs.service for "full cache mode".
+#           In this mode all reads and writes are buffered to and from disk. When data is read from the remote
+#           this is buffered to disk as well. This mode consumes the most bandwidth and storage space however
+#           it behaves similarly to a regular OneDrive client.
 # 			See https://rclone.org/commands/rclone_mount/#vfs-file-caching for all VFS config options
 
 RED='\033[1;31m'
@@ -85,16 +85,16 @@ if [[ "${NAME}" == "Debian"* ]]; then
 	systemctl start wsdd2.service
 	sudo -v ; curl https://rclone.org/install.sh | sudo bash
 	apt-get remove git build-essential -y
-	
+
 else
 	# Regular Ubuntu flavours
 	apt-get install curl samba acl wsdd2 -y
 	sudo -v ; curl https://rclone.org/install.sh | sudo bash
-	
+
 fi
 
 # Create the rclone config file with correct cuurrent user permissions
-sudo -u $SUDO_USER mkdir -p $RCLONE_CONFIG_PATH   
+sudo -u $SUDO_USER mkdir -p $RCLONE_CONFIG_PATH
 sudo -u $SUDO_USER touch $RCLONE_CONFIG_PATH/rclone.conf
 
 # Setup the current logged on linux user as a samba user then add this user to a new "sambausers" security group
@@ -102,7 +102,7 @@ sudo -u $SUDO_USER touch $RCLONE_CONFIG_PATH/rclone.conf
 groupadd sambausers
 gpasswd -a $SUDO_USER sambausers
 
-# Create new share directories 
+# Create new share directories
 mkdir -p $PRIVSHARE
 mkdir -p $PUBSHARE
 mkdir -p $VFSSHARE
@@ -151,7 +151,7 @@ cat <<EOF | sudo tee $SAMBA_CONFIG_PATH/smb.conf
    directory mask = 0770
    valid users = @sambausers
    guest ok = no
-   hosts allow = 127.0.0.1/8 $HOSTS_ALLOWED 
+   hosts allow = 127.0.0.1/8 $HOSTS_ALLOWED
 
 [Public_Share]
    comment = Public LAN Storage
@@ -190,7 +190,7 @@ localectl set-locale en_AU.UTF-8
 timedatectl set-timezone Australia/Melbourne
 
 
-# Below is for onedrive personal and is intended as a placeholer only. 
+# Below is for onedrive personal and is intended as a placeholer only.
 # You will need to run 'rclone config' after this installer script to correctly complete the Rclone setup for your cloud provider.
 cat <<EOF > $RCLONE_CONFIG_PATH/rclone.conf
 [$RCLONE_REMOTE_NAME]
@@ -240,8 +240,8 @@ RestartSec=3
 WantedBy=default.target
 EOF
 
-# Quick and dirty adjustment to rclonevfs.service because backslashes are escape charaters in cat and thus breaks things.  
-# We need to use "EOF" in quotes to force exact text append, but this also means $VARIABLES become plain text too. 
+# Quick and dirty adjustment to rclonevfs.service because backslashes are escape charaters in cat and thus breaks things.
+# We need to use "EOF" in quotes to force exact text append, but this also means $VARIABLES become plain text too.
 # So, instead we use sed to put back the variable values that should be translated...
 sed -i "s|path_to_rclone.conf|$RCLONE_CONFIG_PATH|g" $SYSTEMD_PATH/rclonevfs.service
 sed -i "s|path_to_rclone_cache|$RCLONE_CACHE_PATH|g" $SYSTEMD_PATH/rclonevfs.service
@@ -255,20 +255,20 @@ systemctl start wsdd2.service
 systemctl enable rclonevfs.service
 systemctl start rclonevfs.service
 
-# Setup structure to call rclone scripts  
+# Setup structure to call rclone scripts
 cat <<"EOF" > $RCLONE_CONFIG_PATH/run-rclone-script.sh
 #!/bin/bash
 
 # Prevent scheduled rclone scripted tasks being run multiple times simultaneously if they are triggered again before the previous is complete.
 # Also we must prevent rclone continuing as a zombie process even after an rclone task has been manually stopped with ^C (a commmon issue in some circumstances)
 
-# Instead, we should hand launch or cron schedule all scripted rclone tasks via this caller script. 
+# Instead, we should hand launch or cron schedule all scripted rclone tasks via this caller script.
 
 # This script first validates if a particular scheduled rclone script is still running, then kills it before re-running same.
 # You can confirm how many instances of a script are running at any time with..
-# ps aux | grep rclone 
+# ps aux | grep rclone
 
- 
+
 # Which rclone script do we check to see is already running?
 SYNC_SCRIPT_CHECK_1=script_1
 #SYNC_SCRIPT_CHECK_2=script_2
@@ -296,31 +296,30 @@ sed -i "s|script_1|sync-$RCLONE_REMOTE_NAME.sh|g" $RCLONE_CONFIG_PATH/run-rclone
 sed -i "s|script_2|some-other-rclone-script.sh|g" $RCLONE_CONFIG_PATH/run-rclone-script.sh
 sed -i "s|script_path|$RCLONE_CONFIG_PATH|g" $RCLONE_CONFIG_PATH/run-rclone-script.sh
 
-# 
+#
 cat <<EOF > $RCLONE_CONFIG_PATH/sync-$RCLONE_REMOTE_NAME.sh
 #!/bin/bash
 # This example DOWNLOADS from cloud storage, syncs to a local share and writes error level output to a logfile (change ERROR to INFO or DEBUG for differing output)
 # The below settings are very conservative and do not appear to trigger any bannning or errors from a OneDrive Personal remote connection.
 # See rclone docs for more info on tuning cloud provider connections and avoiding a breach of provider transaction & connection limits. (Breaching limits can invoke upstream throttling or even periodic disconnections)
- 
+
 rclone sync --tpslimit 3  --tpslimit-burst 1 --transfers=3 $RCLONE_REMOTE_NAME: $PRIVSHARE --log-level ERROR --log-file $PRIVSHARE/rclone.log --stats-one-line
 
 # EXAMPLE manual commmand - DOWNLOADS from cloud and syncs to a local share showing info output in the terminal)
-#rclone sync -v --tpslimit 3  --tpslimit-burst 1 --transfers=3 $RCLONE_REMOTE_NAME: $PRIVSHARE --stats-one-line 
+#rclone sync -v --tpslimit 3  --tpslimit-burst 1 --transfers=3 $RCLONE_REMOTE_NAME: $PRIVSHARE --stats-one-line
 EOF
 
 chmod +x $RCLONE_CONFIG_PATH/sync-$RCLONE_REMOTE_NAME.sh
 chown $SUDO_USER:$SUDO_USER $RCLONE_CONFIG_PATH/sync-$RCLONE_REMOTE_NAME.sh
 
 
-# Setup a (disabled) example cron task in current user's crontab to regularly run a scripted rclone task 
+# Setup a (disabled) example cron task in current user's crontab to regularly run a scripted rclone task
 su -s /bin/bash -c 'crontab -l > /home/$SUDO_USER/cron_2' -m $SUDO_USER
 echo "#0 */12 * * * $RCLONE_CONFIG_PATH/run-rclone-script.sh # run this rclone task every 12 hours" >> /home/$SUDO_USER/cron_2
 su -s /bin/bash -c 'crontab /home/$SUDO_USER/cron_2' -m $SUDO_USER
 rm /home/$SUDO_USER/cron_2
 
 apt-get autoremove -y
-apt-get clean 
+apt-get clean
 
 echo -e "${NC}"
-
