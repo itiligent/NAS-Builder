@@ -16,21 +16,21 @@
 # 	 - Next share directories are created in the paths as per $PRIVSHARE $PUBSHARE and $VFSSHARE variables
 #    - Correct file permissions are set on the new share directories
 #    - The preconfigured samba.conf file is copied over.
-#    - The rclone.conf placeholder is created in $RCLONE_CONFIG_PATH and correct user permissions to it are set. 
+#    - The rclone.conf placeholder is created in $RCLONE_CONFIG_PATH and correct user permissions to it are set.
 #    - Rclone VFS is created as a system service and mounted in the $VFSSHARE path
 #    - Samba and Rclone services are restarted
-#	 - WSDD2 to enable network browsing is installed last. (This order seems to work better at discovering the finished samba config)   
+#	 - WSDD2 to enable network browsing is installed last. (This order seems to work better at discovering the finished samba config)
 
 # 4. Investigate the correct settings you will need to authenticate with your cloud storage provider.
 #    See https://rclone.org for all other Rclone cloud sync options and instructions.
 # 5. Run rclone config and follow the interactive prompts that relate to your specific cloud provider.
-# 6. Restart the preconfigured VFS cache service with systemctl start rclonevfs.service. 
+# 6. Restart the preconfigured VFS cache service with systemctl start rclonevfs.service.
 
 #    Note1: Additional logging options to the $SYSTEMD_PATH/rclonevfs.service will help with any specific troubleshooting.
 #    Log optionas are DEBUG, INFO, NOTICE & ERROR
 #    The below to rclonevfs.service to enables logging to syslog with resonable verbosity
 #    --log-level INFO \
- 
+
 #    Note2: Many config options exist for setup and performance of VFS caching for many different use cases.
 #           The settings in this script configures $SYSTEMD_PATH/rclonevfs.service for "full cache mode".
 #           In this mode all reads and writes are buffered to and from disk. When data is read from the remote
@@ -57,6 +57,7 @@ fi
 clear
 
 # user specific variables - set up your base file system and rclone cache directories where you want
+MOUNTPOINT=/mnt/data
 PRIVSHARE=/mnt/data/private_share
 PUBSHARE=/mnt/data/public_share
 VFSSHARE=/mnt/data/onedrive_vfs
@@ -75,10 +76,10 @@ HOSTS_ALLOWED=$(ip -o -f inet addr show $INTERFACE | awk '/scope global/ {print 
 # Install packages
 apt-get update
 
-# Debian and Raspbian have slightly differnt stable package lists. Wsdd2 is not currently avaiable as stable in Debian 11.5 
+# Debian and Raspbian have slightly differnt stable package lists. Wsdd2 is not currently avaiable as stable in Debian 11.5
 source /etc/os-release
 if [[ "${NAME}" == "Debian"* ]]; then
-	apt-get install curl samba acl git build-essential -y
+	apt-get install curl samba acl git build-essential wget -y
 	git clone https://salsa.debian.org/debian/wsdd2.git
 	cd wsdd2 && make && make install
 	systemctl enable wsdd2.service
@@ -106,10 +107,12 @@ gpasswd -a $SUDO_USER sambausers
 mkdir -p $PRIVSHARE
 mkdir -p $PUBSHARE
 mkdir -p $VFSSHARE
-# Optionally chang the default permissions on the share directors to avoid permissions issues when moving files around from Linux command as sudo
+# Change the default permissions on the share directors and mount point to allow users and backup applications access
+chown -R $SUDO_USER:root $MOUNTPOINT
 chown -R $SUDO_USER:$SUDO_USER $PRIVSHARE
 chown -R $SUDO_USER:$SUDO_USER $PUBSHARE
 chown -R $SUDO_USER:root $VFSSHARE
+
 
 # Set Permissions on new share directories
 sudo setfacl -R -m "g:sambausers:rwx" $PRIVSHARE
@@ -249,7 +252,7 @@ sed -i "s|path_to_vfs_root|$VFSSHARE|g" $SYSTEMD_PATH/rclonevfs.service
 sed -i "s|remote_name|$RCLONE_REMOTE_NAME|g" $SYSTEMD_PATH/rclonevfs.service
 
 
-# Kickstart all services 
+# Kickstart all services
 systemctl restart smbd nmbd
 systemctl start wsdd2.service
 systemctl enable rclonevfs.service

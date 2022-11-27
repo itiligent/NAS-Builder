@@ -5,16 +5,18 @@
 # November 2022                                                                       #
 #######################################################################################
 
-# Assumes Ubuntu server 22.04 installed
+# Assumes Ubuntu server 22.04 installed. Skip for Debian
 
 sudo apt-get update
 sudo apt-get install ubuntu-desktop-minimal --no-install-recommends open-vm-tools-desktop gnome-startup-applications -y
 sudo reboot
 
-# Optionally install Google Chrome:
+# Optionally install Google Chrome: Debian has mozilla installed by default
+
 wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
 sudo dpkg -i google-chrome-stable_current_amd64.deb # dependency errors will show, fixed with following command
 sudo apt -f install
+rm google-chrome-stable_current_amd64.deb
 
 # Set correct locale for easy to read file time/date formats
 locale-gen --purge "en_AU.UTF-8"
@@ -29,14 +31,25 @@ date +%x
 sudo dpkg --add-architecture i386 
 sudo mkdir -pm755 /etc/apt/keyrings
 sudo wget -O /etc/apt/keyrings/winehq-archive.key https://dl.winehq.org/wine-builds/winehq.key
+
+# Ubuntu:
 sudo wget -NP /etc/apt/sources.list.d/ https://dl.winehq.org/wine-builds/ubuntu/dists/jammy/winehq-jammy.sources # check your Linux distro and adjust ie Jammy
 sudo apt update
 sudo apt install --install-recommends winehq-stable -y
-sudo apt-get install -y curl wget software-properties-common gnupg2 winbind xvfb winetricks -y
+sudo apt-get install -y winetricks -y # xvfb gnupg2 winbind? software-properties-common 
+
+# Debian
+sudo wget -NP /etc/apt/sources.list.d/ https://dl.winehq.org/wine-builds/debian/dists/bullseye/winehq-bullseye.sources
+sudo apt update
+sudo apt install --install-recommends winehq-stable -y
+sudo nano /etc/apt/sources.list and add to the end of every debian repo entry: contrib non-free
+
+sudo apt-get install -y winetricks -y # xvfb gnupg2 winbind? software-properties-common 
+
 
 sudo apt-get clean -y
 sudo apt-get autoremove -y
-rm google-chrome-stable_current_amd64.deb
+
 # Wine configuration
 # Log in to the desktop gui and run: 
 winecfg 
@@ -60,7 +73,7 @@ if [ -f "/home/$USER/.wine/drive_c/Program Files (x86)/Backblaze/bzbui.exe" ]; t
     wine64 "/home/$USER/.wine/drive_c/Program Files (x86)/Backblaze/bzbui.exe" -noqiet &
     sleep infinity
 else
-    cd ~/.wine/drive_c
+    cd /home/$USER/.wine/drive_c
     curl -L "https://www.backblaze.com/win32/install_backblaze.exe" --output "install_backblaze.exe"
     ls -la
     wine64 "install_backblaze.exe" &
@@ -73,8 +86,17 @@ chmod +x backblaze_upload.sh
 # Run the script FROM THE DESKTOP GUI TERMINAL
 ./backblaze_upload.sh
 # Backblaze client will download, Login to the client to continue (screen sometimes does not refresh) and click install. 
-# To run the Backblaze client subsequently, run the above script again, or set the script up as startup application in the Ubuntu gui
-# and then enable automatic login via settings | users
+# To run the Backblaze client subsequently, run the above script again, or set the script up as startup application 
+
+#	in the Ubuntu Desktop
+	# set the script up as startup application 
+	# enable automatic login via settings | users
+
+#	In Debian Desktop
+	# edit /etc/lightdm/lightdm.conf  
+	#[Seat:*]
+	#autologin-user=username
+	# Applications | Settings | Session and Startup | Application Autostart
 
 # Clean up
 rm ~/.wine/drive_c/install_backblaze.exe
@@ -86,3 +108,4 @@ chmod +x bzdownloader.sh
 #!/bin/sh
 cd ~/.wine/drive_c/backblaze_downloader
 wine64 "bzdownloader.exe"
+
