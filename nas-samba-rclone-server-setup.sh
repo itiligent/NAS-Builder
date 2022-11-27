@@ -56,7 +56,7 @@ fi
 
 clear
 
-# user specific variables
+# user specific variables - set up your base file system and rclone cache directories where you want
 PRIVSHARE=/mnt/data/private_share
 PUBSHARE=/mnt/data/public_share
 VFSSHARE=/mnt/data/onedrive_vfs
@@ -64,7 +64,7 @@ RCLONE_CACHE_PATH=/mnt/data/.rclone
 SMBPASS=password
 RCLONE_REMOTE_NAME=rclone_remote_connection
 
-# platform variables
+# platform variables - unlikely to need to change these
 SAMBA_CONFIG_PATH=/etc/samba
 RCLONE_CONFIG_PATH=/home/$SUDO_USER/.config/rclone 
 SYSTEMD_PATH=/etc/systemd/system
@@ -240,7 +240,7 @@ RestartSec=3
 WantedBy=default.target
 EOF
 
-# Quick and dirty adjustment to rclonevfs.service because backslashes are cat escape characters. 
+# Quick and dirty adjustment to rclonevfs.service because backslashes are escape charaters in cat and thus breaks things.  
 # We need to use "EOF" in quotes to force exact text append, but this also means $VARIABLES become plain text too. 
 # So, instead we use sed to put back the variable values that should be translated...
 sed -i "s|path_to_rclone.conf|$RCLONE_CONFIG_PATH|g" $SYSTEMD_PATH/rclonevfs.service
