@@ -56,12 +56,12 @@ fi
 
 clear
 
-# user specific variables - set up your base file system and rclone cache directories where you want
-MOUNTPOINT=/mnt/data
-PRIVSHARE=/mnt/data/private_share
-PUBSHARE=/mnt/data/public_share
-VFSSHARE=/mnt/data/onedrive_vfs
-RCLONE_CACHE_PATH=/mnt/data/.rclone
+# user specific variables - set up your base file system and rclone cache directories where you want.
+MOUNTPOINT=/data
+PRIVSHARE=/data/private_share
+PUBSHARE=/data/public_share
+VFSSHARE=/data/onedrive_vfs
+RCLONE_CACHE_PATH=/data/.rclone
 SMBPASS=password
 RCLONE_REMOTE_NAME=rclone_remote_connection
 
@@ -86,6 +86,7 @@ if [[ "${NAME}" == "Debian"* ]]; then
 	systemctl start wsdd2.service
 	sudo -v ; curl https://rclone.org/install.sh | sudo bash
 	apt-get remove git build-essential -y
+	sudo rm -R wsdd2/
 
 else
 	# Regular Ubuntu flavours
@@ -324,5 +325,6 @@ rm /home/$SUDO_USER/cron_2
 
 apt-get autoremove -y
 apt-get clean
+
 
 echo -e "${NC}"
