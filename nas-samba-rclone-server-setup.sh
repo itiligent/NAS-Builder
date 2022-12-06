@@ -72,14 +72,13 @@ SYSTEMD_PATH=/etc/systemd/system
 INTERFACE=$(ip -br l | awk '$1 !~ "lo|vir|wl" { print $1}')
 HOSTS_ALLOWED=$(ip -o -f inet addr show $INTERFACE | awk '/scope global/ {print $4}' | perl -ne 's/(?<=\d.)\d{1,3}(?=\/)/0/g; print;')
 
-
 # Install packages
 apt-get update
 
 # Debian and Raspbian have slightly differnt stable package lists. Wsdd2 is not currently avaiable as stable in Debian 11.5
 source /etc/os-release
 if [[ "${NAME}" == "Debian"* ]]; then
-	apt-get install curl samba acl git build-essential wget -y
+	apt-get install curl samba acl git build-essential wget fdupes -y
 	git clone https://salsa.debian.org/debian/wsdd2.git
 	cd wsdd2 && make && make install
 	systemctl enable wsdd2.service
@@ -90,7 +89,7 @@ if [[ "${NAME}" == "Debian"* ]]; then
 
 else
 	# Regular Ubuntu flavours
-	apt-get install curl samba acl wsdd2 -y
+	apt-get install curl samba acl wsdd2 fdupes -y
 	sudo -v ; curl https://rclone.org/install.sh | sudo bash
 
 fi
@@ -113,7 +112,6 @@ chown -R $SUDO_USER:root $MOUNTPOINT
 chown -R $SUDO_USER:$SUDO_USER $PRIVSHARE
 chown -R $SUDO_USER:$SUDO_USER $PUBSHARE
 chown -R $SUDO_USER:root $VFSSHARE
-
 
 # Set Permissions on new share directories
 sudo setfacl -R -m "g:sambausers:rwx" $PRIVSHARE
@@ -193,7 +191,6 @@ dpkg-reconfigure --frontend noninteractive locales
 localectl set-locale en_AU.UTF-8
 timedatectl set-timezone Australia/Melbourne
 
-
 # Below is for onedrive personal and is intended as a placeholer only.
 # You will need to run 'rclone config' after this installer script to correctly complete the Rclone setup for your cloud provider.
 cat <<EOF > $RCLONE_CONFIG_PATH/rclone.conf
@@ -212,8 +209,8 @@ EOF
 cat <<"EOF" > $SYSTEMD_PATH/rclonevfs.service
 [Unit]
 Description=One Drive VFS Mount (rclone)
-AssertPathIsDirectory=path_to_vfs_root
-After=multi-user.target
+Wants=network-online.target
+After=network-online.target
 
 [Service]
 Type=notify
@@ -235,23 +232,23 @@ ExecStart=/usr/bin/rclone mount \
         --cache-db-wait-time 0m3s \
         --buffer-size 256m \
         --allow-other \
-        --uid 1000 remote_name:/ path_to_vfs_root
+        --uid vfs_user remote_name:/ path_to_vfs_root
 ExecStop=/bin/fusermount -u path_to_vfs_root
 Restart=always
 RestartSec=3
 
 [Install]
-WantedBy=default.target
+WantedBy=multi-user.target
 EOF
 
-# Quick and dirty adjustment to rclonevfs.service because backslashes are escape charaters in cat and thus breaks things.
+# Quick and dirty adjustment to rclonevfs.service because backslashes are also escape charaters in cat and thus breaks things.
 # We need to use "EOF" in quotes to force exact text append, but this also means $VARIABLES become plain text too.
 # So, instead we use sed to put back the variable values that should be translated...
 sed -i "s|path_to_rclone.conf|$RCLONE_CONFIG_PATH|g" $SYSTEMD_PATH/rclonevfs.service
 sed -i "s|path_to_rclone_cache|$RCLONE_CACHE_PATH|g" $SYSTEMD_PATH/rclonevfs.service
 sed -i "s|path_to_vfs_root|$VFSSHARE|g" $SYSTEMD_PATH/rclonevfs.service
 sed -i "s|remote_name|$RCLONE_REMOTE_NAME|g" $SYSTEMD_PATH/rclonevfs.service
-
+su -s /bin/bash -c 'sed -i "s|vfs_user|$UID|g" $SYSTEMD_PATH/rclonevfs.service' -m $SUDO_USER
 
 # Kickstart all services
 systemctl restart smbd nmbd
@@ -300,22 +297,20 @@ sed -i "s|script_1|sync-$RCLONE_REMOTE_NAME.sh|g" $RCLONE_CONFIG_PATH/run-rclone
 sed -i "s|script_2|some-other-rclone-script.sh|g" $RCLONE_CONFIG_PATH/run-rclone-script.sh
 sed -i "s|script_path|$RCLONE_CONFIG_PATH|g" $RCLONE_CONFIG_PATH/run-rclone-script.sh
 
-#
 cat <<EOF > $RCLONE_CONFIG_PATH/sync-$RCLONE_REMOTE_NAME.sh
 #!/bin/bash
 # This example DOWNLOADS from cloud storage, syncs to a local share and writes error level output to a logfile (change ERROR to INFO or DEBUG for differing output)
 # The below settings are very conservative and do not appear to trigger any bannning or errors from a OneDrive Personal remote connection.
 # See rclone docs for more info on tuning cloud provider connections and avoiding a breach of provider transaction & connection limits. (Breaching limits can invoke upstream throttling or even periodic disconnections)
 
-rclone sync --tpslimit 3  --tpslimit-burst 1 --transfers=3 $RCLONE_REMOTE_NAME: $PRIVSHARE --log-level ERROR --log-file $PRIVSHARE/rclone.log --stats-one-line
+rclone sync --tpslimit 5  --tpslimit-burst 2 --transfers=5 $RCLONE_REMOTE_NAME: $PRIVSHARE --log-level ERROR --log-file $PRIVSHARE/rclone.log --stats-one-line
 
 # EXAMPLE manual commmand - DOWNLOADS from cloud and syncs to a local share showing info output in the terminal)
-#rclone sync -v --tpslimit 3  --tpslimit-burst 1 --transfers=3 $RCLONE_REMOTE_NAME: $PRIVSHARE --stats-one-line
+#rclone sync -v --tpslimit 5  --tpslimit-burst 2 --transfers=5 $RCLONE_REMOTE_NAME: $PRIVSHARE --stats-one-line
 EOF
 
 chmod +x $RCLONE_CONFIG_PATH/sync-$RCLONE_REMOTE_NAME.sh
 chown $SUDO_USER:$SUDO_USER $RCLONE_CONFIG_PATH/sync-$RCLONE_REMOTE_NAME.sh
-
 
 # Setup a (disabled) example cron task in current user's crontab to regularly run a scripted rclone task
 su -s /bin/bash -c 'crontab -l > /home/$SUDO_USER/cron_2' -m $SUDO_USER
@@ -325,7 +320,6 @@ rm /home/$SUDO_USER/cron_2
 
 apt-get autoremove -y
 apt-get clean
-
 
 echo -e "${NC}"
 
