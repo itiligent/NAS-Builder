@@ -15,27 +15,35 @@
 #	 - Samba is first installed and the current user is enabled for samba and then added to the a new sambausers group
 # 	 - Next share directories are created in the paths as per $PRIVSHARE $PUBSHARE and $VFSSHARE variables
 #    - Correct file permissions are set on the new share directories
-#    - The preconfigured samba.conf file is copied over.
-#    - The rclone.conf placeholder is created in $RCLONE_CONFIG_PATH and correct user permissions to it are set.
+#    - The preconfigured starting samba.conf file is copied over.
+#    - The rclone.conf placeholder file is created in $RCLONE_CONFIG_PATH and correct user permissions to it are set.
 #    - Rclone VFS is created as a system service and mounted in the $VFSSHARE path
 #    - Samba and Rclone services are restarted
 #	 - WSDD2 to enable network browsing is installed last. (This order seems to work better at discovering the finished samba config)
 
 # 4. Investigate the correct settings you will need to authenticate with your cloud storage provider.
 #    See https://rclone.org for all other Rclone cloud sync options and instructions.
-# 5. Run rclone config and follow the interactive prompts that relate to your specific cloud provider.
-# 6. Restart the preconfigured VFS cache service with systemctl start rclonevfs.service.
+# 5. Run "rclone config" and follow the interactive prompts that relate to your specific cloud provider.
+# 6. Restart the preconfigured VFS cache service with systemctl start rclonevfs.service. 
+	(Samba interactions may impeding Rclone from closing all threads down, so sometimes a reboot is better.)
 
 #    Note1: Additional logging options to the $SYSTEMD_PATH/rclonevfs.service will help with any specific troubleshooting.
 #    Log optionas are DEBUG, INFO, NOTICE & ERROR
-#    The below to rclonevfs.service to enables logging to syslog with resonable verbosity
+#    Eg. Uncommmnet the below line in rclonevfs.service setup to enables logging to syslog with resonable verbosity
 #    --log-level INFO \
 
-#    Note2: Many config options exist for setup and performance of VFS caching for many different use cases.
+#    Note2: Some cloud providers place limits on the number of API calls, transactions per second or discreet simultaneous file transfers. 
+#	 You may nbeed to tune the agressiveness of RCLONE to stay within provider limits.  The debug logging option will help with any specific troubleshooting.
+#    	Change the below lines as only if needed. For Onedrive default are: --transfers 4,  --tps-limit 0 (unlimited) , --tpslimit-burst 1
+#			--transfers 7 \
+#			--tpslimit 7 \  
+#			--tpslimit-burst 2 \
+
+#    Note3: Many config options exist for setup and performance of VFS caching for many different use cases.
 #           The settings in this script configures $SYSTEMD_PATH/rclonevfs.service for "full cache mode".
 #           In this mode all reads and writes are buffered to and from disk. When data is read from the remote
 #           this is buffered to disk as well. This mode consumes the most bandwidth and storage space however
-#           it behaves similarly to a regular OneDrive client.
+#           it behaves most similarly to a regular OneDrive client. Depending on your use case and how files are being changed or accessed you may want to adapt this.
 # 			See https://rclone.org/commands/rclone_mount/#vfs-file-caching for all VFS config options
 
 RED='\033[1;31m'
@@ -229,9 +237,13 @@ ExecStart=/usr/bin/rclone mount \
         --vfs-read-chunk-size 128m \
         --vfs-read-ahead 512m \
         --vfs-read-chunk-size-limit 0 \
-        --cache-db-wait-time 0m3s \
+        --cache-db-wait-time 0m1s \
         --buffer-size 256m \
         --allow-other \
+#		--log-level INFO \
+#		--transfers 7 \
+#		--tpslimit 7  
+#		--tpslimit-burst 2
         --uid vfs_user remote_name:/ path_to_vfs_root
 ExecStop=/bin/fusermount -u path_to_vfs_root
 Restart=always
@@ -241,14 +253,14 @@ RestartSec=3
 WantedBy=multi-user.target
 EOF
 
-# Quick and dirty adjustment to rclonevfs.service because backslashes are also escape charaters in cat and thus breaks things.
-# We need to use "EOF" in quotes to force exact text append, but this also means $VARIABLES become plain text too.
-# So, instead we use sed to put back the variable values that should be translated...
+# Quick and dirty adjustment to rclonevfs.service file because backslashes are also escape charaters in cat and this breaks fomatting during the append.
+# We need to use "EOF" in quotes to force exact text append though, but this also means $VARIABLES become plain text too. Argh.
+# So, instead we use sed to put back the variable values back that are temporarily flagged with specifc text placeholders...
 sed -i "s|path_to_rclone.conf|$RCLONE_CONFIG_PATH|g" $SYSTEMD_PATH/rclonevfs.service
 sed -i "s|path_to_rclone_cache|$RCLONE_CACHE_PATH|g" $SYSTEMD_PATH/rclonevfs.service
 sed -i "s|path_to_vfs_root|$VFSSHARE|g" $SYSTEMD_PATH/rclonevfs.service
 sed -i "s|remote_name|$RCLONE_REMOTE_NAME|g" $SYSTEMD_PATH/rclonevfs.service
-su -s /bin/bash -c 'sed -i "s|vfs_user|$UID|g" $SYSTEMD_PATH/rclonevfs.service' -m $SUDO_USER
+su -s /bin/bash -c 'sed -i "s|vfs_user|$UID|g" $SYSTEMD_PATH/rclonevfs.service' -m $SUDO_USER # as script runs as sudo, we need to do it this way to capture the correct user UID
 
 # Kickstart all services
 systemctl restart smbd nmbd
@@ -323,3 +335,5 @@ apt-get clean
 
 echo -e "${NC}"
 
+# To do
+# improve rclonevfs.service to call on dependencies with samba, or ensure all rclone threads are killed before restart to make manual service stop and start commands more reliable.  
