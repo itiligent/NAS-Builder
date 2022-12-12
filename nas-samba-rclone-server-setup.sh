@@ -229,7 +229,7 @@ ExecStart=/usr/bin/rclone mount \
         --cache-dir=path_to_rclone_cache \
         --cache-chunk-size 8m \
         --cache-chunk-total-size 25g \
-        --cache-info-age 12h \
+        --cache-info-age 8h \
         --cache-tmp-wait-time 30s \
         --dir-cache-time 5m \
         --vfs-cache-mode full \
