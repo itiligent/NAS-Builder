@@ -210,7 +210,7 @@ region = global
 token = {"??"}
 drive_id = ???
 drive_type = personal
-chunk_size = 320k
+chunk_size = 10M
 EOF
 
 # Create the Rclone VFS system service
@@ -256,9 +256,9 @@ RestartSec=3
 WantedBy=multi-user.target
 EOF
 
-# Quick and dirty adjustment to rclonevfs.service file because backslashes are also escape charaters in cat and this breaks fomatting during the append.
-# We need to use "EOF" in quotes to force exact text append though, but this also means $VARIABLES become plain text too. Argh.
-# So, instead we use sed to put back the variable values back that are temporarily flagged with specifc text placeholders...
+# Quick and dirty adjustment to rclonevfs.service file because backslashes are also escape charaters in using in cat - and these break fomatting during the append.
+# To append the backslashes we need to use "EOF" in quotes, but this breaks $VARIABLES into plain text too. Argh.
+# A quick workaround is to temporarily flag the variables as simple unique text values, and we then use sed to put back the $variable values back after the file is first written with cat.
 sed -i "s|path_to_rclone.conf|$RCLONE_CONFIG_PATH|g" $SYSTEMD_PATH/rclonevfs.service
 sed -i "s|path_to_rclone_cache|$RCLONE_CACHE_PATH|g" $SYSTEMD_PATH/rclonevfs.service
 sed -i "s|path_to_vfs_root|$VFSSHARE|g" $SYSTEMD_PATH/rclonevfs.service
@@ -278,21 +278,21 @@ cat <<"EOF" > $RCLONE_CONFIG_PATH/run-rclone-script.sh
 # Prevent scheduled rclone scripted tasks being run multiple times simultaneously if they are triggered again before the previous is complete.
 # Also we must prevent rclone continuing as a zombie process even after an rclone task has been manually stopped with ^C (a commmon issue in some circumstances)
 
-# Instead, we should hand launch or cron schedule all scripted rclone tasks via this caller script.
+# Instead, we launch or cron schedule all scripted rclone tasks via this caller script. 
 
-# This script first validates if a particular scheduled rclone script is still running, then kills it before re-running same.
+
+# This script first validates if a particular scheduled rclone process script is still running, then kills it before re-running same.
 # You can confirm how many instances of a script are running at any time with..
 # ps aux | grep rclone
 
-
-# Which rclone script do we check to see is already running?
+# Which rclone scripts do we check to see are already running?
 SYNC_SCRIPT_CHECK_1=script_1
 #SYNC_SCRIPT_CHECK_2=script_2
 
-
-# Make a list of any PIDs that contain the term "rclone" that are running. Place any extra exceptions below. Be careful using "rclone" other script names. try r-clone
+# Make a list of any PIDs that contain the term "rclone" that are running - except with the following verbs. Place any extra exceptions below. 
+# Note: This caller script does not kill rclone processes that use the "mount" directive, so it will not interupt VFS cahce or mapped drives etc.
+# 		Be careful using the term "rclone" in other script names. Any additional rclone scripts or verbs you DO NOT want to kill should be exceptions added below here:
 PID=`ps aux | grep "rclone" | grep -v 'grep' | grep -v 'mount' | grep -v 'nano' | grep -v 'run-rclone-script.sh' | awk '{ print $2 }'`
-#PID=`ps aux | grep some-other-string | awk '{print $2}'` # for later if needed
 
 # Now lets kill all of the PIDs from the list
 for P in $PID; do
@@ -300,7 +300,7 @@ for P in $PID; do
     kill -9 $P
 done
 
-# Now that we've stopped the rclone we dont want to duplicate, we can start the same script(s) again
+# Now that we've stopped rclone processes we want to re-run, we can start the same script(s) again
 script_path/$SYNC_SCRIPT_CHECK_1
 #script_path/$SYNC_SCRIPT_CHECK_2 # for later if needed
 EOF
@@ -308,6 +308,7 @@ EOF
 chmod +x $RCLONE_CONFIG_PATH/run-rclone-script.sh
 chown $SUDO_USER:$SUDO_USER $RCLONE_CONFIG_PATH/run-rclone-script.sh
 
+# Fix the variables in the rclone caller script because "EOF" appends variables only as plain text.
 sed -i "s|script_1|sync-$RCLONE_REMOTE_NAME.sh|g" $RCLONE_CONFIG_PATH/run-rclone-script.sh
 sed -i "s|script_2|some-other-rclone-script.sh|g" $RCLONE_CONFIG_PATH/run-rclone-script.sh
 sed -i "s|script_path|$RCLONE_CONFIG_PATH|g" $RCLONE_CONFIG_PATH/run-rclone-script.sh
@@ -315,13 +316,14 @@ sed -i "s|script_path|$RCLONE_CONFIG_PATH|g" $RCLONE_CONFIG_PATH/run-rclone-scri
 cat <<EOF > $RCLONE_CONFIG_PATH/sync-$RCLONE_REMOTE_NAME.sh
 #!/bin/bash
 # This example DOWNLOADS from cloud storage, syncs to a local share and writes error level output to a logfile (change ERROR to INFO or DEBUG for differing output)
-# The below settings are very conservative and do not appear to trigger any bannning or errors from a OneDrive Personal remote connection.
-# See rclone docs for more info on tuning cloud provider connections and avoiding a breach of provider transaction & connection limits. (Breaching limits can invoke upstream throttling or even periodic disconnections)
+# The below settings are conservative and do not appear to trigger any bannning or errors from a OneDrive Personal remote connection.
+# See rclone docs for more info on tuning cloud provider connections and avoiding a breach of provider transaction & connection limits. 
+# (Breaching limits can invoke upstream throttling or even periodic disconnections)
 
-rclone sync --tpslimit 5  --tpslimit-burst 2 --transfers=5 $RCLONE_REMOTE_NAME: $PRIVSHARE --log-level ERROR --log-file $PRIVSHARE/rclone.log --stats-one-line
+rclone sync --tpslimit 7  --tpslimit-burst 2 --transfers=7 $RCLONE_REMOTE_NAME: $PRIVSHARE --log-level ERROR --log-file $PRIVSHARE/rclone.log --stats-one-line
 
 # EXAMPLE manual commmand - DOWNLOADS from cloud and syncs to a local share showing info output in the terminal)
-#rclone sync -v --tpslimit 5  --tpslimit-burst 2 --transfers=5 $RCLONE_REMOTE_NAME: $PRIVSHARE --stats-one-line
+#rclone sync -v --tpslimit 7  --tpslimit-burst 2 --transfers=7 $RCLONE_REMOTE_NAME: $PRIVSHARE --stats-one-line
 EOF
 
 chmod +x $RCLONE_CONFIG_PATH/sync-$RCLONE_REMOTE_NAME.sh
@@ -340,6 +342,3 @@ echo -e "${NC}"
 
 # To do
 # improve rclonevfs.service to call on dependencies with samba, or ensure all rclone threads are killed before restart to make manual service stop and start commands more reliable.  
-
---vfs-cache-max-age 1h
---vfs-cache-poll-interval 60s
