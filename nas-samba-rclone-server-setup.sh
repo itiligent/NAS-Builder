@@ -227,23 +227,26 @@ ExecStart=/usr/bin/rclone mount \
         --cache-tmp-upload-path=path_to_rclone_cache \
         --cache-db-path=path_to_rclone_cache \
         --cache-dir=path_to_rclone_cache \
-        --cache-chunk-size 8m \
-        --cache-chunk-total-size 25g \
-        --cache-info-age 8h \
-        --cache-tmp-wait-time 30s \
+        --cache-chunk-size 32m \
+        --cache-chunk-total-size 50g \
+        --cache-info-age 6h \
         --dir-cache-time 5m \
+        --cache-tmp-wait-time 30s \
+        --write-back-cache \
         --vfs-cache-mode full \
+        --vfs-cache-poll-interval 1m0s \
+        --vfs-write-back 10s \
         --vfs-cache-max-age 1h \
         --vfs-read-chunk-size 128m \
         --vfs-read-ahead 512m \
+        --buffer-size 128m \
         --vfs-read-chunk-size-limit 0 \
-        --cache-db-wait-time 0m1s \
-        --buffer-size 256m \
+        --cache-db-wait-time 0m2s \
         --allow-other \
-#		--log-level INFO \
-#		--transfers 7 \
-#		--tpslimit 7  
-#		--tpslimit-burst 2
+#       --log-level INFO \
+#       --transfers 7 \
+#       --tpslimit 7
+#       --tpslimit-burst 2
         --uid vfs_user remote_name:/ path_to_vfs_root
 ExecStop=/bin/fusermount -u path_to_vfs_root
 Restart=always
@@ -337,3 +340,6 @@ echo -e "${NC}"
 
 # To do
 # improve rclonevfs.service to call on dependencies with samba, or ensure all rclone threads are killed before restart to make manual service stop and start commands more reliable.  
+
+--vfs-cache-max-age 1h
+--vfs-cache-poll-interval 60s
