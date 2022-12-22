@@ -232,7 +232,6 @@ ExecStart=/usr/bin/rclone mount \
         --cache-info-age 6h \
         --dir-cache-time 5m \
         --cache-tmp-wait-time 30s \
-        --write-back-cache \
         --vfs-cache-mode full \
         --vfs-cache-poll-interval 1m0s \
         --vfs-write-back 10s \
@@ -243,10 +242,12 @@ ExecStart=/usr/bin/rclone mount \
         --vfs-read-chunk-size-limit 0 \
         --cache-db-wait-time 0m2s \
         --allow-other \
+# Other potentially useful options..
 #       --log-level INFO \
 #       --transfers 7 \
-#       --tpslimit 7
-#       --tpslimit-burst 2
+#       --tpslimit 7 \
+#       --tpslimit-burst 2 \
+#       --allow-non-empty \
         --uid vfs_user remote_name:/ path_to_vfs_root
 ExecStop=/bin/fusermount -u path_to_vfs_root
 Restart=always
