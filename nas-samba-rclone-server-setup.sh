@@ -28,16 +28,15 @@
 #	(Samba interactions may impeding Rclone from closing all threads down, so sometimes a reboot is better.)
 
 #    Note1: Additional logging options to the $SYSTEMD_PATH/rclonevfs.service will help with any specific troubleshooting.
-#    Log optionas are DEBUG, INFO, NOTICE & ERROR
+#    Log options are DEBUG, INFO, NOTICE & ERROR
 #    Eg. Uncommmnet the below line in rclonevfs.service setup to enables logging to syslog with resonable verbosity
 #    --log-level INFO \
 
 #    Note2: Some cloud providers place limits on the number of API calls, transactions per second or discreet simultaneous file transfers. 
-#	 You may nbeed to tune the agressiveness of RCLONE to stay within provider limits.  The debug logging option will help with any specific troubleshooting.
-#    	Change the below lines as only if needed. For Onedrive default are: --transfers 4,  --tps-limit 0 (unlimited) , --tpslimit-burst 1
-#			--transfers 7 \
-#			--tpslimit 7 \  
-#			--tpslimit-burst 2 \
+#	 You may nbeed to tune the agressiveness of Rclone to stay within provider limits.  The debug logging option will help with any specific troubleshooting.
+#    	Change the below lines as only if needed. For Onedrive defaults are: --transfers 4,  --tps-limit 0 (unlimited) , --tpslimit-burst 1
+#	My own testing with OneDrive seems to avoid issues and throttling with these settings running rclone sync tasks below..
+#			--transfers 7 --tpslimit 7 --tpslimit-burst 2 
 
 #    Note3: Many config options exist for setup and performance of VFS caching for many different use cases.
 #           The settings in this script configures $SYSTEMD_PATH/rclonevfs.service for "full cache mode".
@@ -83,7 +82,7 @@ HOSTS_ALLOWED=$(ip -o -f inet addr show $INTERFACE | awk '/scope global/ {print 
 # Install packages
 apt-get update
 
-# Debian and Raspbian have slightly differnt stable package lists. Wsdd2 is not currently avaiable as stable in Debian 11.5
+# Debian and Raspbian have slightly differnt stable package lists. Wsdd2 is not currently available as stable in Debian 11.5
 source /etc/os-release
 if [[ "${NAME}" == "Debian"* ]]; then
 	apt-get install curl samba acl git build-essential wget fdupes -y
@@ -102,7 +101,7 @@ else
 
 fi
 
-# Create the rclone config file with correct cuurrent user permissions
+# Create the rclone config file with correct current user permissions
 sudo -u $SUDO_USER mkdir -p $RCLONE_CONFIG_PATH
 sudo -u $SUDO_USER touch $RCLONE_CONFIG_PATH/rclone.conf
 
@@ -115,6 +114,7 @@ gpasswd -a $SUDO_USER sambausers
 mkdir -p $PRIVSHARE
 mkdir -p $PUBSHARE
 mkdir -p $VFSSHARE
+
 # Change the default permissions on the share directors and mount point to allow users and backup applications access
 chown -R $SUDO_USER:root $MOUNTPOINT
 chown -R $SUDO_USER:$SUDO_USER $PRIVSHARE
@@ -242,13 +242,13 @@ ExecStart=/usr/bin/rclone mount \
         --vfs-read-chunk-size-limit 0 \
         --cache-db-wait-time 0m2s \
         --allow-other \
+        --uid vfs_user remote_name:/ path_to_vfs_root
 # Other potentially useful options..
 #       --log-level INFO \
 #       --transfers 7 \
 #       --tpslimit 7 \
 #       --tpslimit-burst 2 \
 #       --allow-non-empty \
-        --uid vfs_user remote_name:/ path_to_vfs_root
 ExecStop=/bin/fusermount -u path_to_vfs_root
 Restart=always
 RestartSec=3
@@ -257,9 +257,10 @@ RestartSec=3
 WantedBy=multi-user.target
 EOF
 
-# Quick and dirty adjustment to rclonevfs.service file because backslashes are also escape charaters in using in cat - and these break fomatting during the append.
-# To append the backslashes we need to use "EOF" in quotes, but this breaks $VARIABLES into plain text too. Argh.
+# Quick and dirty adjustment to rclonevfs.service file because backslashes are also escape charaters when using in cat - and these break formatting during the append with cat.
+# To append the backslashes we need to use "EOF" in quotes, but doing this breaks $VARIABLES into plain text instead...argh!
 # A quick workaround is to temporarily flag the variables as simple unique text values, and we then use sed to put back the $variable values back after the file is first written with cat.
+# There might be a better way, but this works well if there's not too many lines to deal with
 sed -i "s|path_to_rclone.conf|$RCLONE_CONFIG_PATH|g" $SYSTEMD_PATH/rclonevfs.service
 sed -i "s|path_to_rclone_cache|$RCLONE_CACHE_PATH|g" $SYSTEMD_PATH/rclonevfs.service
 sed -i "s|path_to_vfs_root|$VFSSHARE|g" $SYSTEMD_PATH/rclonevfs.service
@@ -272,12 +273,12 @@ systemctl start wsdd2.service
 systemctl enable rclonevfs.service
 systemctl start rclonevfs.service
 
-# Setup structure to call rclone scripts
+# Setup structure to call rclone manual sync scripts
 cat <<"EOF" > $RCLONE_CONFIG_PATH/run-rclone-script.sh
 #!/bin/bash
 
-# Prevent scheduled rclone scripted tasks being run multiple times simultaneously if they are triggered again before the previous is complete.
-# Also we must prevent rclone continuing as a zombie process even after an rclone task has been manually stopped with ^C (a commmon issue in some circumstances)
+# we need to prevent scheduled rclone scripted tasks being run multiple times simultaneously if they are triggered again before the previous is complete.
+# Also we must prevent rclone continuing as a zombie process even after an rclone task has been manually stopped with ^C (a commmon Rclone issue in some circumstances)
 
 # Instead, we launch or cron schedule all scripted rclone tasks via this caller script. 
 
@@ -316,14 +317,15 @@ sed -i "s|script_path|$RCLONE_CONFIG_PATH|g" $RCLONE_CONFIG_PATH/run-rclone-scri
 
 cat <<EOF > $RCLONE_CONFIG_PATH/sync-$RCLONE_REMOTE_NAME.sh
 #!/bin/bash
-# This example DOWNLOADS from cloud storage, syncs to a local share and writes error level output to a logfile (change ERROR to INFO or DEBUG for differing output)
+# 
 # The below settings are conservative and do not appear to trigger any bannning or errors from a OneDrive Personal remote connection.
 # See rclone docs for more info on tuning cloud provider connections and avoiding a breach of provider transaction & connection limits. 
 # (Breaching limits can invoke upstream throttling or even periodic disconnections)
 
+# This example DOWNLOADS from cloud storage, syncs to a local share and writes error level output to a logfile (change ERROR to INFO or DEBUG for differing output)
 rclone sync --tpslimit 7  --tpslimit-burst 2 --transfers=7 $RCLONE_REMOTE_NAME: $PRIVSHARE --log-level ERROR --log-file $PRIVSHARE/rclone.log --stats-one-line
 
-# EXAMPLE manual commmand - DOWNLOADS from cloud and syncs to a local share showing info output in the terminal)
+# This example DOWNLOADS from cloud and syncs to a local share and shows info output only to the terminal)
 #rclone sync -v --tpslimit 7  --tpslimit-burst 2 --transfers=7 $RCLONE_REMOTE_NAME: $PRIVSHARE --stats-one-line
 EOF
 
@@ -342,4 +344,5 @@ apt-get clean
 echo -e "${NC}"
 
 # To do
-# improve rclonevfs.service to call on dependencies with samba, or ensure all rclone threads are killed before restart to make manual service stop and start commands more reliable.  
+# improve rclonevfs.service to call on correct dependencies with samba, or somehow to ensure all rclone zombie threads are killed before a VFS restart 
+# to make manual VFS service stop and start commands more reliable. Altering the rclonevfs.service file curently requires a reboot much of the time.  
