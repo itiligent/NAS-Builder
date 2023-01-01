@@ -25,7 +25,7 @@
 #    See https://rclone.org for all other Rclone cloud sync options and instructions.
 # 5. Run "rclone config" and follow the interactive prompts that relate to your specific cloud provider.
 # 6. Restart the preconfigured VFS cache service with systemctl start rclonevfs.service. 
-	(Samba interactions may impeding Rclone from closing all threads down, so sometimes a reboot is better.)
+#	(Samba interactions may impeding Rclone from closing all threads down, so sometimes a reboot is better.)
 
 #    Note1: Additional logging options to the $SYSTEMD_PATH/rclonevfs.service will help with any specific troubleshooting.
 #    Log optionas are DEBUG, INFO, NOTICE & ERROR
